@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  # Service 1: The API
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+
+  # Service 2: The Test Runner
+  tests:
+    build: .
+    command: pytest --cov=app tests/ -v
+    depends_on:
+      - api
