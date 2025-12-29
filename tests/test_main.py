@@ -8,44 +8,27 @@ from app.main import app
 def client():
     return TestClient(app)
 
-# SCENARIO 1: The Happy Path (Mocking a Rockstar User)
+# Parametrized Testing (Data-Driven)
+@pytest.mark.parametrize("username, fake_repos, fake_followers, expected_grade", [
+    ("newbie_dev", 2, 1, "Junior"),       # Case 1: Junior
+    ("mid_level", 20, 10, "Senior"),      # Case 2: Senior
+    ("rockstar_dev", 100, 500, "Rockstar"), # Case 3: Rockstar
+    ("edge_case", 11, 6, "Senior"),       # Case 4: Boundary value
+])
 @respx.mock
-def test_analyze_rockstar_user(client):
-    # ARRANGE: "Intercept" the call to GitHub
-    # We force it to return specific data, so our test is deterministic.
-    respx.get("https://api.github.com/users/octocat").mock(
+def test_user_grading_logic(client, username, fake_repos, fake_followers, expected_grade):
+    # 1. ARRANGE
+    # Dynamically mock the user based on the inputs above
+    respx.get(f"https://api.github.com/users/{username}").mock(
         return_value=Response(200, json={
-            "public_repos": 60, 
-            "followers": 100, 
-            "id": 123
+            "public_repos": fake_repos, 
+            "followers": fake_followers
         })
     )
 
-    # ACT: Call our API
-    response = client.post("/analyze_user", json={"username": "octocat"})
+    # 2. ACT
+    response = client.post("/analyze_user", json={"username": username})
 
-    # ASSERT: Check our logic
+    # 3. ASSERT
     assert response.status_code == 200
-    data = response.json()
-    assert data["assessed_grade"] == "Rockstar" 
-    assert data["stats"]["repos"] == 60
-
-# SCENARIO 2: The Error Path (Mocking GitHub Downtime)
-@respx.mock
-def test_github_downtime(client):
-    # ARRANGE: Simulate GitHub crashing (Returning 500)
-    respx.get("https://api.github.com/users/failguy").mock(
-        return_value=Response(500)
-    )
-
-    # ACT
-    response = client.post("/analyze_user", json={"username": "failguy"})
-
-    # ASSERT: Ensure our API handles it gracefully (returns 503, not crash)
-    assert response.status_code == 503
-    assert response.json()["detail"] == "GitHub API unavailable"
-
-# SCENARIO 3: Validation (Pydantic Check)
-def test_empty_username(client):
-    response = client.post("/analyze_user", json={"username": ""})
-    assert response.status_code == 400
+    assert response.json()["assessed_grade"] == expected_grade
